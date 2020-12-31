@@ -392,12 +392,6 @@ int main()
                 case Keyboard::Down:
                     fall();
                     break;
-                case Keyboard::Space:
-                    while (!settled)
-                    {
-                        fall();
-                    }
-                    break;
                 }
                 break;
             }
@@ -405,8 +399,9 @@ int main()
 
         int distance = abs(puyo.first.getPosition().first - puyo.second.getPosition().first) + abs(puyo.first.getPosition().second - puyo.second.getPosition().second);
 
-        movement *= !blockinput || (distance != 1);
+        movement *= !(blockinput || (distance != 1));
         bool a, b;
+
         if (puyo.first.getPosition().first > puyo.second.getPosition().first)
         {
             if (movement == 1)
@@ -438,7 +433,7 @@ int main()
         }
         else 
         {
-            if (movement == 1)
+            if (movement == -1)
             {
                 a = puyo.first.move(movement);
                 b = puyo.second.move(movement);
