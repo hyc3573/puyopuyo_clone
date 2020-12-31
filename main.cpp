@@ -30,6 +30,54 @@ class Board
 {
 private:
     vector<vector<Square>> board;
+
+    stack<pair<int, int>> dfs(int X, int Y, bool visited[BWIDTH][BHEIGHT])
+    {
+        stack<pair<int, int>> result;
+        stack<pair<int, int>> ohno;
+        
+        visited[X][Y] = true;
+
+        if (X != 0 && (board[X - 1][Y] == board[X][Y] && !visited[X-1][Y]))
+        {
+            result = dfs(X - 1, Y, visited);
+            while (!result.empty())
+            {
+                ohno.push(result.top());
+                result.pop();
+            }
+        }
+        if (X != BWIDTH - 1 && (board[X + 1][Y] == board[X][Y] && !visited[X+1][Y]))
+        {
+            result = (dfs(X + 1, Y, visited));
+            while (!result.empty())
+            {
+                ohno.push(result.top());
+                result.pop();
+            }
+        }
+        if (Y != 0 && (board[X][Y - 1] == board[X][Y] && !visited[X][Y-1]))
+        {
+            result = dfs(X, Y - 1, visited);
+            while (!result.empty())
+            {
+                ohno.push(result.top());
+                result.pop();
+            }
+        }
+        if (Y != BHEIGHT - 1 && (board[X][Y + 1] == board[X][Y] && !visited[X][Y+1]))
+        {
+            result = dfs(X, Y + 1, visited);
+            while (!result.empty())
+            {
+                ohno.push(result.top());
+                result.pop();
+            }
+        }
+        ohno.push(pair<int, int>(X, Y));
+
+        return ohno;
+    }
     
 public:
     Board()
@@ -50,6 +98,33 @@ public:
     void setSquare(int X, int Y, Square setting)
     {
         board[X][Y] = setting;
+    }
+
+    bool pop()
+    {
+        bool popped = false;
+        bool visited[BWIDTH][BHEIGHT] = { 0, };
+        
+        for (int i = 0;i < BWIDTH;i++)
+        {
+            for (int j = 0;j < BHEIGHT; j++)
+            {
+                if (board[i][j] != BLANK)
+                {
+                    auto result = dfs(i, j, visited);
+                    if (result.size() >= 4)
+                    {
+                        popped = true;
+                        while (result.size() != 0)
+                        {
+                            board[result.top().first][result.top().second] = BLANK;
+                            result.pop();
+                        }
+                    }
+                }
+            }
+        }
+        return popped;
     }
 };
 
@@ -137,20 +212,24 @@ public:
                 switch (this->rotation)
                 {
                 case 0:
+                    cout << "a" << endl;
                     X += 1;
                     Y -= 1;
                     break;
                 case 1:
-                    X -= 1;
-                    Y -= 1;
+                    cout << "b" << endl;
+                    X += 1;
+                    Y += 1;
                     break;
                 case 2:
+                    cout << "c" << endl;
                     X -= 1;
                     Y += 1;
                     break;
                 case 3:
-                    X += 1;
-                    Y += 1;
+                    cout << "d" << endl;
+                    X -= 1;
+                    Y -= 1;
                 }
             }
 
@@ -164,7 +243,7 @@ public:
             board.setSquare(bakX, bakY, BLANK);
             board.setSquare(X, Y, color);
             this->rotation += rotation;
-            this->rotation = this->rotation % 4;
+            this->rotation = (4 + this->rotation) % 4;
         }
     }
 
@@ -185,7 +264,6 @@ int main()
 
     sf::RenderWindow window(sf::VideoMode(SWIDTH, SHEIGHT), L"¤±¤¤¤·¤©");
     
-    list<pair<Puyo, Puyo>> puyoList;
     Board board;
     queue<pair<Square, Square>> puyoQue;
     pair<Puyo, Puyo> puyo = make_pair(Puyo(board), Puyo(board));
@@ -221,20 +299,65 @@ int main()
     {
         puyoQue = queue<pair<Square, Square>>();
         board = Board();
-        puyoList = list<pair<Puyo, Puyo>>();
 
         puyoQue.push(pair<Square, Square>(static_cast<Square>(rand() % 4 + 1), static_cast<Square>(rand() % 4 + 1)));
         puyoQue.push(pair<Square, Square>(static_cast<Square>(rand() % 4 + 1), static_cast<Square>(rand() % 4 + 1)));
         puyoQue.push(pair<Square, Square>(static_cast<Square>(rand() % 4 + 1), static_cast<Square>(rand() % 4 + 1)));
 
         fallClock.restart();
+
+        settled = false;
+        blockinput = false;
+        
+        newPuyo();
     };
 
     auto settle = [&]()
     {
-        puyoList.push_back(puyo);
         newPuyo();
         puyoQue.push(pair<Square, Square>(static_cast<Square>(rand() % 4 + 1), static_cast<Square>(rand() % 4 + 1)));
+    };
+
+    auto fall = [&]()
+    {
+        fallClock.restart();
+
+        blockinput = false;
+        settled = true;
+        if (puyo.first.getPosition().second > puyo.second.getPosition().second)
+        {
+            blockinput = puyo.first.isStopped() || blockinput;
+            settled = puyo.first.isStopped() && settled;
+            puyo.first.fall();
+            blockinput = puyo.second.isStopped() || blockinput;
+            settled = puyo.second.isStopped() && settled;
+            puyo.second.fall();
+        }
+        else
+        {
+            blockinput = puyo.second.isStopped() || blockinput;
+            settled = puyo.first.isStopped() && settled;
+            puyo.second.fall();
+            blockinput = puyo.first.isStopped() || blockinput;
+            settled = puyo.second.isStopped() && settled;
+            puyo.first.fall();
+        }
+    };
+
+    auto draw = [&]()
+    {
+        window.clear();
+
+        for (int i = 0; i < BWIDTH; i++)
+        {
+            for (int j = 0; j < BHEIGHT; j++)
+            {
+                rboard[i][j].setFillColor(colors[board.getSquare(i, j)]);
+                window.draw(rboard[i][j]);
+            }
+        }
+
+        window.display();
     };
 
     reset();
@@ -266,36 +389,80 @@ int main()
                 case Keyboard::Z:
                     rotation = -1;
                     break;
+                case Keyboard::Down:
+                    fall();
+                    break;
+                case Keyboard::Space:
+                    while (!settled)
+                    {
+                        fall();
+                    }
+                    break;
                 }
                 break;
             }
         }
 
-        movement *= !blockinput;
+        int distance = abs(puyo.first.getPosition().first - puyo.second.getPosition().first) + abs(puyo.first.getPosition().second - puyo.second.getPosition().second);
+
+        movement *= !blockinput || (distance != 1);
+        bool a, b;
         if (puyo.first.getPosition().first > puyo.second.getPosition().first)
         {
             if (movement == 1)
             {
-                puyo.first.move(movement);
-                puyo.second.move(movement);
+                a = puyo.first.move(movement);
+                b = puyo.second.move(movement);
+                if (!a && b)
+                {
+                    puyo.second.move(-movement);
+                }
+                else if (!b && a)
+                {
+                    puyo.first.move(-movement);
+                }
             }
             else 
             {
-                puyo.second.move(movement);
-                puyo.first.move(movement);
+                a = puyo.second.move(movement);
+                b = puyo.first.move(movement);
+                if (!a && b)
+                {
+                    puyo.first.move(-movement);
+                }
+                else if (!b && a)
+                {
+                    puyo.second.move(-movement);
+                }
             }
         }
         else 
         {
             if (movement == 1)
             {
-                puyo.second.move(movement);
-                puyo.first.move(movement);
+                a = puyo.first.move(movement);
+                b = puyo.second.move(movement);
+                if (!a && b)
+                {
+                    puyo.second.move(-movement);
+                }
+                else if (!b && a)
+                {
+                    puyo.first.move(-movement);
+                }
             }
             else
             {
-                puyo.first.move(movement);
-                puyo.second.move(movement);
+                a = puyo.second.move(movement);
+                b = puyo.first.move(movement);
+                if (!a && b)
+                {
+                    puyo.first.move(-movement);
+                }
+                else if (!b && a)
+                {
+                    puyo.second.move(-movement);
+                }
             }
         }
         movement = 0;
@@ -307,48 +474,64 @@ int main()
 
         if (fallClock.getElapsedTime().asSeconds() > FALLSPD)
         {
-            fallClock.restart();
-
-            blockinput = false;
-            settled = true;
-            if (puyo.first.getPosition().second > puyo.second.getPosition().second)
-            {
-                blockinput = puyo.first.isStopped() || blockinput;
-                settled = puyo.first.isStopped() && settled;
-                puyo.first.fall();
-                blockinput = puyo.second.isStopped() || blockinput;
-                settled = puyo.second.isStopped() && settled;
-                puyo.second.fall();
-            }
-            else
-            {
-                blockinput = puyo.second.isStopped() || blockinput;
-                settled = puyo.first.isStopped() && settled;
-                puyo.second.fall();
-                blockinput = puyo.first.isStopped() || blockinput;
-                settled = puyo.second.isStopped() && settled;
-                puyo.first.fall();
-            }
+            fall();
         }
 
         if (settled)
         {
-            newPuyo();
-            settled = false;
-        }
-
-        window.clear();
-        
-        for (int i = 0; i < BWIDTH; i++)
-        {
-            for (int j = 0; j < BHEIGHT; j++)
+            if (puyo.first.getPosition() == pair<int, int>(BWIDTH / 2 - 1, 0) || puyo.second.getPosition() == pair<int, int>(BWIDTH / 2 - 1, 0))
             {
-                rboard[i][j].setFillColor(colors[board.getSquare(i, j)]);
-                window.draw(rboard[i][j]);
+                reset();
+            }
+            else
+            {
+                bool allsettled = true;
+                Clock dt;
+
+                while (board.pop())
+                {
+                    do
+                    {
+                        dt.restart();
+
+                        bool markings[BWIDTH][BHEIGHT + 1] = { 0, };
+                        allsettled = true;
+                        for (int i = 0; i < BWIDTH; i++)
+                        {
+                            for (int j = 0; j < BHEIGHT; j++)
+                            {
+                                if ((!board.isIllegal(i, j + 1) && (board.getSquare(i, j + 1) == BLANK && board.getSquare(i, j) != BLANK)) || markings[i][j + 1])
+                                {
+                                    allsettled = false;
+                                    markings[i][j] = true;
+                                }
+                            }
+                        }
+
+                        for (int i = 0;i < BWIDTH;i++)
+                        {
+                            for (int j = BHEIGHT - 1;j >= 0;j--) // to prevent clipping
+                            {
+                                if (markings[i][j] == true)
+                                {
+                                    board.setSquare(i, j + 1, board.getSquare(i, j));
+                                    board.setSquare(i, j, BLANK);
+                                }
+                            }
+                        }
+
+                        draw();
+                        //sleep(seconds(1/60-dt.getElapsedTime().asSeconds()));
+                        sleep(seconds(0.5));
+                    } while (!allsettled);
+                }
+                
+                newPuyo();
+                settled = false;
             }
         }
 
-        window.display();
+        draw();
     }
     return 0;
 }
