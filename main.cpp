@@ -93,16 +93,15 @@ public:
         return true;
     }
 
-    bool fall()
+    void fall()
     {
-        if (board.isIllegal(X, Y + 1) || board.getSquare(X, Y + 1) != BLANK)
+        if (isStopped())
         {
-            return false;
+            return;
         }
         board.setSquare(X, Y, BLANK);
         Y += 1;
         board.setSquare(X, Y, color);
-        return true;
     }
 
     void rotate(int rotation)
@@ -121,16 +120,16 @@ public:
                     Y -= 1;
                     break;
                 case 1:
-                    X -= 1;
-                    Y += 1;
+                    X += 1;
+                    Y -= 1;
                     break;
                 case 2:
                     X += 1;
                     Y += 1;
                     break;
                 case 3:
-                    X += 1;
-                    Y -= 1;
+                    X -= 1;
+                    Y += 1;
                 }
             }
             else if (rotation == -1)
@@ -139,18 +138,18 @@ public:
                 {
                 case 0:
                     X += 1;
-                    Y += 1;
+                    Y -= 1;
                     break;
                 case 1:
-                    X += 1;
+                    X -= 1;
                     Y -= 1;
                     break;
                 case 2:
                     X -= 1;
-                    Y -= 1;
+                    Y += 1;
                     break;
                 case 3:
-                    X -= 1;
+                    X += 1;
                     Y += 1;
                 }
             }
@@ -176,7 +175,7 @@ public:
 
     bool isStopped()
     {
-        return board.isIllegal(X, Y + 1) || board.getSquare(X, Y) != BLANK;
+        return board.isIllegal(X, Y + 1) || board.getSquare(X, Y+1) != BLANK;
     }
 };
 
@@ -205,12 +204,17 @@ int main()
     Clock fallClock;
 
     bool blockinput = false;
+    bool settled = false;
+
+    int movement = 0;
+    int rotation = 0;
 
     auto newPuyo = [&]()
     {
         auto temp = puyoQue.front();
         puyoQue.pop();
-        puyo = make_pair(Puyo(temp.first, HEAD, 0, 0, board), Puyo(temp.second, TAIL, 0, 1, board));
+        puyoQue.push(pair<Square, Square>(static_cast<Square>(rand() % 4 + 1), static_cast<Square>(rand() % 4 + 1)));
+        puyo = make_pair(Puyo(temp.first, HEAD, BWIDTH/2 - 1, 0, board), Puyo(temp.second, TAIL, BWIDTH/2 - 1, 1, board));
     };
 
     auto reset = [&]()
@@ -233,22 +237,6 @@ int main()
         puyoQue.push(pair<Square, Square>(static_cast<Square>(rand() % 4 + 1), static_cast<Square>(rand() % 4 + 1)));
     };
 
-    auto fall = [&]() -> bool
-    {
-        bool result = true;
-        if (puyo.first.getPosition().first > puyo.second.getPosition().second)
-        {
-            result = puyo.first.fall() && result;
-            result = puyo.second.fall() && result;
-        }
-        else
-        {
-            result = puyo.second.fall() && result;
-            result = puyo.first.fall() && result;
-        }
-        return result;
-    };
-
     reset();
     newPuyo();
 
@@ -257,18 +245,96 @@ int main()
         sf::Event event;
         while (window.pollEvent(event))
         {
-            if (event.type == sf::Event::Closed) window.close();
+            switch (event.type)
+            {
+            case Event::Closed:
+                window.close();
+                break;
+
+            case Event::KeyPressed:
+                switch (event.key.code)
+                {
+                case Keyboard::Left:
+                    movement = -1;
+                    break;
+                case Keyboard::Right:
+                    movement = 1;
+                    break;
+                case Keyboard::Up:
+                    rotation = 1;
+                    break;
+                case Keyboard::Z:
+                    rotation = -1;
+                    break;
+                }
+                break;
+            }
         }
+
+        movement *= !blockinput;
+        if (puyo.first.getPosition().first > puyo.second.getPosition().first)
+        {
+            if (movement == 1)
+            {
+                puyo.first.move(movement);
+                puyo.second.move(movement);
+            }
+            else 
+            {
+                puyo.second.move(movement);
+                puyo.first.move(movement);
+            }
+        }
+        else 
+        {
+            if (movement == 1)
+            {
+                puyo.second.move(movement);
+                puyo.first.move(movement);
+            }
+            else
+            {
+                puyo.first.move(movement);
+                puyo.second.move(movement);
+            }
+        }
+        movement = 0;
+
+        rotation *= !blockinput;
+        puyo.first.rotate(rotation);
+        puyo.second.rotate(rotation);
+        rotation = 0;
 
         if (fallClock.getElapsedTime().asSeconds() > FALLSPD)
         {
             fallClock.restart();
-            fall();
+
+            blockinput = false;
+            settled = true;
+            if (puyo.first.getPosition().second > puyo.second.getPosition().second)
+            {
+                blockinput = puyo.first.isStopped() || blockinput;
+                settled = puyo.first.isStopped() && settled;
+                puyo.first.fall();
+                blockinput = puyo.second.isStopped() || blockinput;
+                settled = puyo.second.isStopped() && settled;
+                puyo.second.fall();
+            }
+            else
+            {
+                blockinput = puyo.second.isStopped() || blockinput;
+                settled = puyo.first.isStopped() && settled;
+                puyo.second.fall();
+                blockinput = puyo.first.isStopped() || blockinput;
+                settled = puyo.second.isStopped() && settled;
+                puyo.first.fall();
+            }
         }
 
-        if (blockinput)
+        if (settled)
         {
-
+            newPuyo();
+            settled = false;
         }
 
         window.clear();
